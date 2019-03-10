@@ -252,6 +252,8 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
  *
  * After the call, the passed sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
+/*重新分配sds字符串，使其在末尾没有空闲空间。所包含的字符串保持不变，
+ *但是接下来的连接操作将需要重新分配。*/
 sds sdsRemoveFreeSpace(sds s) {
     void *sh, *newsh;
     char type, oldtype = s[-1] & SDS_TYPE_MASK;
@@ -326,6 +328,21 @@ void *sdsAllocPtr(sds s) {
  * ... check for nread <= 0 and handle it ...
  * sdsIncrLen(s, nread);
  */
+/* 根据“incr”增加sds长度并减小字符串末尾的剩余空闲空间。
+*  还要在字符串的新末尾设置null项。
+*  这个函数用于在用户调用sdsMakeRoomFor()后修正字符串长度，
+*  在当前字符串末尾后写入内容，最后需要设置新的长度。
+
+*  注意:可以使用负增量来右微调字符串。
+*  使用的例子:
+*  使用sdsIncrLen()和sdsMakeRoomFor()可以挂载以下模式，
+*  从内核到sds字符串末尾的cat字节，而不需要复制到中间缓冲区:
+*  oldlen = sdslen(s);
+*  s = sdsMakeRoomFor(s, BUFFER_SIZE);
+*  nread = read(fd, s+oldlen, BUFFER_SIZE);
+*  …检查nread <= 0并处理它…
+*  sdsIncrLen(s, nread);
+*/
 void sdsIncrLen(sds s, ssize_t incr) {
     unsigned char flags = s[-1];
     size_t len;
@@ -380,6 +397,7 @@ sds sdsgrowzero(sds s, size_t len) {
     if (s == NULL) return NULL;
 
     /* Make sure added region doesn't contain garbage */
+    /* 确保添加的区域不包含垃圾*/
     memset(s+curlen,0,(len-curlen+1)); /* also set trailing \0 byte */
     sdssetlen(s, len);
     return s;
